@@ -13,8 +13,9 @@ type Worker struct {
 
 	TaskFunction TaskFunction
 
-	messageType reflect.Type
-	channel     chan string
+	messageType    reflect.Type
+	sendChannel    chan<- string
+	recieveChannel <-chan string
 }
 
 type WorkerInfo struct {
@@ -33,12 +34,13 @@ func getType(message mq.Message) reflect.Type {
 }
 
 func New(adapter mq.MQAdapter, message mq.Message, taskFunction TaskFunction, concurrency int) *Worker {
-	c := adapter.Channel(message.Type())
+	send, recieve := adapter.Channel(message.Type())
 	return &Worker{
-		Concurrency:  concurrency,
-		TaskFunction: taskFunction,
-		messageType:  getType(message),
-		channel:      c,
+		Concurrency:    concurrency,
+		TaskFunction:   taskFunction,
+		messageType:    getType(message),
+		sendChannel:    send,
+		recieveChannel: recieve,
 	}
 }
 
@@ -55,14 +57,14 @@ func (w *Worker) Submit(message mq.Message) error {
 		return err
 	}
 
-	w.channel <- str
+	w.sendChannel <- str
 	return nil
 }
 
 func (w *Worker) ProcessTask(info WorkerInfo) error {
 
 	for {
-		rawMsg, ok := <-w.channel
+		rawMsg, ok := <-w.recieveChannel
 		if !ok {
 			break
 		}

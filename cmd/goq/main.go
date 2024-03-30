@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/masnun/goq/mq"
-	"github.com/masnun/goq/mq/adapters/memory"
+	"github.com/masnun/goq/mq/adapters/redis"
 	"github.com/masnun/goq/worker"
 	"time"
 )
@@ -43,7 +43,7 @@ func PrintUser(info worker.WorkerInfo, message mq.Message) error {
 }
 
 func main() {
-	mq := memory.New()
+	mq := redis.New("redis://127.0.0.1:6379/0")
 
 	user := &User{
 		Name:  "Masnun",
@@ -54,7 +54,10 @@ func main() {
 	w := worker.New(mq, user, PrintUser, 2)
 	w.Start()
 
-	for i := 1; i < 101; i++ {
+	for i := 1; i < 100; i++ {
+
+		time.Sleep(2 * time.Second)
+
 		w.Submit(&User{
 			Name:  user.Name,
 			Email: user.Email,
