@@ -5,7 +5,6 @@ type MQAdapter interface {
 }
 
 type Message interface {
-	Type() string
 	Marshal() (string, error)
 	UnMarshal(content string) (Message, error)
 }

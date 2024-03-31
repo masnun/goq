@@ -15,7 +15,7 @@ type User struct {
 	ID    int
 }
 
-func (u *User) Marshal() (string, error) {
+func (u User) Marshal() (string, error) {
 	j, err := json.Marshal(u)
 	if err != nil {
 		return "", err
@@ -23,50 +23,36 @@ func (u *User) Marshal() (string, error) {
 	return string(j), nil
 }
 
-func (u *User) UnMarshal(content string) (mq.Message, error) {
-	err := json.Unmarshal([]byte(content), u)
+func (u User) UnMarshal(content string) (mq.Message, error) {
+
+	newUser := User{}
+	err := json.Unmarshal([]byte(content), &newUser)
 	if err != nil {
-		return &User{}, err
+		return User{}, err
 	}
 
-	return u, nil
-}
-
-func (u *User) Type() string {
-	return "user"
+	return newUser, nil
 }
 
 func PrintUser(info worker.WorkerInfo, message mq.Message) error {
-	user := message.(*User)
+	user := message.(User)
 	fmt.Printf("[WorkerID %d] Name: %s Email: %s Serial: %d \n", info.ID, user.Name, user.Email, user.ID)
 	return nil
 }
 
 func main() {
-	mq := redis.New("redis://127.0.0.1:6379/0")
+	redisAdapter := redis.New("redis://127.0.0.1:6379/0")
+	queue := mq.New(redisAdapter, "test")
 
-	user := &User{
+	user := User{
 		Name:  "Masnun",
 		Email: "masnun@gmail.com",
 		ID:    0,
 	}
 
-	w := worker.New(mq, user, PrintUser, 2)
+	w := worker.New(queue, user, PrintUser, 2)
 	w.Start()
 
-	for i := 1; i < 100; i++ {
-
-		time.Sleep(2 * time.Second)
-
-		w.Submit(&User{
-			Name:  user.Name,
-			Email: user.Email,
-			ID:    i,
-		})
-	}
-
-	w.Submit(user)
-
-	<-time.After(3 * time.Minute)
+	<-time.After(30 * time.Minute)
 
 }

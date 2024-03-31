@@ -9,13 +9,10 @@ import (
 type TaskFunction func(info WorkerInfo, message mq.Message) error
 
 type Worker struct {
-	Concurrency int
-
+	Queue        *mq.Queue
+	Concurrency  int
 	TaskFunction TaskFunction
-
-	messageType    reflect.Type
-	sendChannel    chan<- string
-	recieveChannel <-chan string
+	messageType  reflect.Type
 }
 
 type WorkerInfo struct {
@@ -33,14 +30,13 @@ func getType(message mq.Message) reflect.Type {
 
 }
 
-func New(adapter mq.MQAdapter, message mq.Message, taskFunction TaskFunction, concurrency int) *Worker {
-	send, recieve := adapter.Channel(message.Type())
+func New(queue *mq.Queue, message mq.Message, taskFunction TaskFunction, concurrency int) *Worker {
+
 	return &Worker{
-		Concurrency:    concurrency,
-		TaskFunction:   taskFunction,
-		messageType:    getType(message),
-		sendChannel:    send,
-		recieveChannel: recieve,
+		Concurrency:  concurrency,
+		TaskFunction: taskFunction,
+		Queue:        queue,
+		messageType:  getType(message),
 	}
 }
 
@@ -51,26 +47,17 @@ func (w *Worker) Start() {
 	}
 }
 
-func (w *Worker) Submit(message mq.Message) error {
-	str, err := message.Marshal()
-	if err != nil {
-		return err
-	}
-
-	w.sendChannel <- str
-	return nil
-}
-
 func (w *Worker) ProcessTask(info WorkerInfo) error {
 
+	channel := w.Queue.Channel()
+
 	for {
-		rawMsg, ok := <-w.recieveChannel
+		rawMsg, ok := <-channel
 		if !ok {
 			break
 		}
 
-		message := reflect.New(w.messageType).Interface().(mq.Message)
-
+		message := reflect.New(w.messageType).Elem().Interface().(mq.Message)
 		message, err := message.UnMarshal(rawMsg)
 		if err != nil {
 			return err
