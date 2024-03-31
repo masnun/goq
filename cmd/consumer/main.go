@@ -1,58 +1,54 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/masnun/goq/cmd/internal"
 	"github.com/masnun/goq/mq"
 	"github.com/masnun/goq/mq/adapters/redis"
 	"github.com/masnun/goq/worker"
 	"time"
 )
 
-type User struct {
-	Name  string
-	Email string
-	ID    int
-}
-
-func (u User) Marshal() (string, error) {
-	j, err := json.Marshal(u)
-	if err != nil {
-		return "", err
-	}
-	return string(j), nil
-}
-
-func (u User) UnMarshal(content string) (mq.Message, error) {
-
-	newUser := User{}
-	err := json.Unmarshal([]byte(content), &newUser)
-	if err != nil {
-		return User{}, err
-	}
-
-	return newUser, nil
-}
-
 func PrintUser(info worker.WorkerInfo, message mq.Message) error {
-	user := message.(User)
-	fmt.Printf("[WorkerID %d] Name: %s Email: %s Serial: %d \n", info.ID, user.Name, user.Email, user.ID)
+
+	user := message.(internal.User)
+	fmt.Printf("[WorkerID %d] [Queue: %s] Name: %s Email: %s Serial: %d \n", info.ID, info.QueueName, user.Name, user.Email, user.ID)
+	return nil
+}
+
+func PrintPost(info worker.WorkerInfo, message mq.Message) error {
+	post := message.(*internal.Post)
+	fmt.Printf("[WorkerID %d] [Queue: %s] Title: %s Summary: %s Serial: %d \n", info.ID, info.QueueName, post.Title, post.Summary, post.ID)
 	return nil
 }
 
 func main() {
-	redisAdapter := redis.New("redis://127.0.0.1:6379/0")
-	queue := mq.New(redisAdapter, "test")
 
-	user := User{
-		Name:  "Masnun",
-		Email: "masnun@gmail.com",
-		ID:    0,
-	}
-
-	w := worker.New(queue, user, PrintUser, 2)
-	w.Start()
+	go ConsumeUserQueue()
+	go ConsumePostQueue()
 
 	<-time.After(30 * time.Minute)
+
+}
+
+func ConsumeUserQueue() {
+	redisAdapter := redis.New("redis://127.0.0.1:6379/0")
+	queue := mq.New(redisAdapter, "user")
+
+	user := internal.User{}
+
+	w := worker.New(queue, user, PrintUser, 3)
+	w.Start()
+
+}
+
+func ConsumePostQueue() {
+	redisAdapter := redis.New("redis://127.0.0.1:6379/0")
+	queue := mq.New(redisAdapter, "post")
+
+	post := &internal.Post{}
+
+	w := worker.New(queue, post, PrintPost, 1)
+	w.Start()
 
 }

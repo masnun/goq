@@ -3,6 +3,7 @@ package mq
 type Queue struct {
 	sendChannel    chan<- string
 	recieveChannel <-chan string
+	channelName    string
 }
 
 func New(adapter MQAdapter, channelName string) *Queue {
@@ -10,7 +11,15 @@ func New(adapter MQAdapter, channelName string) *Queue {
 	return &Queue{
 		sendChannel:    send,
 		recieveChannel: recieve,
+		channelName:    channelName,
 	}
+}
+func (q *Queue) String() string {
+	return q.channelName
+}
+
+func (q *Queue) Name() string {
+	return q.channelName
 }
 
 func (q *Queue) Channel() <-chan string {

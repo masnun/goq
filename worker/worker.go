@@ -9,40 +9,46 @@ import (
 type TaskFunction func(info WorkerInfo, message mq.Message) error
 
 type Worker struct {
-	Queue        *mq.Queue
-	Concurrency  int
-	TaskFunction TaskFunction
-	messageType  reflect.Type
+	Queue                *mq.Queue
+	Concurrency          int
+	TaskFunction         TaskFunction
+	messageType          reflect.Type
+	messageTypeIsPointer bool
 }
 
 type WorkerInfo struct {
-	ID int
+	ID        int
+	QueueName string
 }
 
-func getType(message mq.Message) reflect.Type {
+func getType(message mq.Message) (reflect.Type, bool) {
 	t := reflect.TypeOf(message)
 	v := reflect.ValueOf(message)
 	if v.Kind() == reflect.Ptr {
 		t = v.Elem().Type()
+		return t, true
 	}
 
-	return t
+	return t, false
 
 }
 
 func New(queue *mq.Queue, message mq.Message, taskFunction TaskFunction, concurrency int) *Worker {
 
+	t, p := getType(message)
+
 	return &Worker{
-		Concurrency:  concurrency,
-		TaskFunction: taskFunction,
-		Queue:        queue,
-		messageType:  getType(message),
+		Concurrency:          concurrency,
+		TaskFunction:         taskFunction,
+		Queue:                queue,
+		messageType:          t,
+		messageTypeIsPointer: p,
 	}
 }
 
 func (w *Worker) Start() {
 	for i := 0; i < w.Concurrency; i++ {
-		info := WorkerInfo{ID: i}
+		info := WorkerInfo{ID: i, QueueName: w.Queue.Name()}
 		go w.ProcessTask(info)
 	}
 }
@@ -57,7 +63,12 @@ func (w *Worker) ProcessTask(info WorkerInfo) error {
 			break
 		}
 
-		message := reflect.New(w.messageType).Elem().Interface().(mq.Message)
+		msgType := reflect.New(w.messageType)
+		if !w.messageTypeIsPointer {
+			msgType = msgType.Elem()
+		}
+
+		message := msgType.Interface().(mq.Message)
 		message, err := message.UnMarshal(rawMsg)
 		if err != nil {
 			return err
